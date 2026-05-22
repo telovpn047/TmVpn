@@ -37,6 +37,8 @@ jobs:
           chmod +x gradlew
 
       - name: Build Debug APK
+        env:
+          SUBSCRIPTION_URL: ${{ secrets.SUBSCRIPTION_URL }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK

@@ -14,12 +14,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Subscription URL'ini buraya gömüyoruz (BuildConfig)
-        buildConfigField(
-            "String",
-            "SUBSCRIPTION_URL",
-            "\"https://doc.google.com/document/d/1-UBaowY2qTddqMEl2nipmesjvLkznh9NcmHqfe7yC4Y/export?format=txthttps://doc.google.com/document/d/1-UBaowY2qTddqMEl2nipmesjvLkznh9NcmHqfe7yC4Y/export?format=txthttps://doc.google.com/document/d/PLACEHOLDER/export?format=txth=0f173e2e8059#Seyith=0f173e2e8059#Seyit\""
-        )
+        // Subscription URL — GitHub Actions'ta SUBSCRIPTION_URL secret'ından gelir.
+        val subUrl: String = System.getenv("SUBSCRIPTION_URL")
+            ?: project.findProperty("SUBSCRIPTION_URL") as String?
+            ?: ""
+        buildConfigField("String", "SUBSCRIPTION_URL", "\"$subUrl\"")
     }
 
     signingConfigs {
