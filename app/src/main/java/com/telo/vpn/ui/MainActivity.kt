@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == RESULT_OK) launchVpn()
+        if (result.resultCode == RESULT_OK) launchVpn() else vm.onDisconnect()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,15 +59,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestVpnPermission() {
+        val selected = vm.startConnecting() ?: return // State → Connecting, config sakla
         val intent = VpnService.prepare(this)
-        if (intent != null) vpnPermissionLauncher.launch(intent) else launchVpn()
+        if (intent != null) vpnPermissionLauncher.launch(intent) else launchVpn(selected)
     }
 
-    private fun launchVpn() {
-        val selected = vm.getSelectedConfig() ?: return
-        val configJson = XrayConfigBuilder.build(selected)
-        vm.markConnected(selected)
-        XrayVpnService.start(this, configJson, selected.remark, vm.killSwitch)
+    private fun launchVpn(selected: com.telo.vpn.model.ServerConfig? = null) {
+        val cfg = selected ?: run { vm.onDisconnect(); return }
+        val configJson = XrayConfigBuilder.build(cfg)
+        // markConnected artık çağrılmıyor — ViewModel isConnected flow'u izliyor
+        XrayVpnService.start(this, configJson, cfg.remark, vm.killSwitch)
     }
 
     private fun disconnectVpn() {

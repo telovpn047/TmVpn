@@ -9,11 +9,11 @@ import com.telo.vpn.model.ConnectionState
 import com.telo.vpn.model.ServerConfig
 import com.telo.vpn.model.TrafficStats
 import com.telo.vpn.service.XrayVpnService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -32,6 +32,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val trafficStats: StateFlow<TrafficStats> = XrayVpnService.trafficStats
     val isVpnConnected: StateFlow<Boolean> = XrayVpnService.isConnected
 
+    private var _pendingConfig: ServerConfig? = null
     private var _killSwitch = false
     val killSwitch get() = _killSwitch
 
@@ -43,6 +44,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             repo.prefs.killSwitch.collect { _killSwitch = it }
         }
+        // VPN bağlantısı kurulunca Connected'a geç
+        viewModelScope.launch {
+            var wasPreviouslyConnected = false
+            XrayVpnService.isConnected.collect { connected ->
+                if (connected && _connState.value is ConnectionState.Connecting) {
+                    _pendingConfig?.let {
+                        _connState.value = ConnectionState.Connected(it)
+                        _pendingConfig = null
+                    }
+                } else if (wasPreviouslyConnected && !connected &&
+                           _connState.value is ConnectionState.Connected) {
+                    // VPN dışarıdan kesildi (sistem, pil vb.)
+                    _connState.value = ConnectionState.Idle
+                    _pendingConfig = null
+                    loadServers()
+                }
+                wasPreviouslyConnected = connected
+            }
+        }
+        // VPN başlatma hatası gelirse Error state'e geç
+        viewModelScope.launch {
+            XrayVpnService.startError.collect { error ->
+                if (error != null && (_connState.value is ConnectionState.Connecting ||
+                                      _connState.value is ConnectionState.Connected)) {
+                    _connState.value = ConnectionState.Error(error)
+                    _pendingConfig = null
+                    XrayVpnService.startError.value = null
+                }
+            }
+        }
     }
 
     fun loadServers() {
@@ -52,7 +83,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             result
                 .onSuccess { (info, servers) ->
                     _userInfo.value = info
-                    // Ping başarısızsa bile ilk sunucuyu seç — firewall TCP'yi bloklayabilir
                     val best = servers.firstOrNull { it.isReachable } ?: servers.first()
                     _connState.value = ConnectionState.Ready(servers, best.config)
                 }
@@ -69,19 +99,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _connState.value = cur.copy(selected = cfg)
     }
 
-    fun onConnectClicked() {
-        if (_connState.value is ConnectionState.Ready) _connState.value = ConnectionState.Connecting
+    // Connecting state'e geç ve seçili config'i sakla
+    fun startConnecting(): ServerConfig? {
+        val cur = _connState.value as? ConnectionState.Ready ?: return null
+        _pendingConfig = cur.selected
+        _connState.value = ConnectionState.Connecting
+        return cur.selected
     }
-
-    fun markConnected(cfg: ServerConfig) { _connState.value = ConnectionState.Connected(cfg) }
 
     fun onDisconnect() {
         _connState.value = ConnectionState.Idle
+        _pendingConfig = null
         loadServers()
     }
-
-    fun getSelectedConfig(): ServerConfig? =
-        (_connState.value as? ConnectionState.Ready)?.selected
 
     fun setKillSwitch(enabled: Boolean) {
         viewModelScope.launch { repo.prefs.setKillSwitch(enabled) }

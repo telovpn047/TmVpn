@@ -30,8 +30,10 @@ class XrayVpnService : VpnService() {
 
         val trafficStats = MutableStateFlow(TrafficStats())
         val isConnected = MutableStateFlow(false)
+        val startError = MutableStateFlow<String?>(null)
 
         fun start(ctx: Context, configJson: String, serverName: String, killSwitch: Boolean = false) {
+            startError.value = null
             ctx.startForegroundService(Intent(ctx, XrayVpnService::class.java).apply {
                 putExtra(EXTRA_CONFIG_JSON, configJson)
                 putExtra(EXTRA_SERVER_NAME, serverName)
@@ -75,6 +77,7 @@ class XrayVpnService : VpnService() {
                 trafficMonitor.statsFlow().collect { trafficStats.value = it }
             } catch (e: Exception) {
                 Log.e(TAG, "VPN başlatma hatası: ${e.message}", e)
+                startError.value = e.message ?: e.javaClass.simpleName
                 isConnected.value = false
                 withContext(Dispatchers.Main) { stopSelf() }
             }
