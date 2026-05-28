@@ -1,0 +1,29 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keystore'lar — ASLA push etme!
+*.keystore
+*.jks
+release.keystore
+keystore.properties
+
+# Gradle wrapper jar GitHub Actions tarafından üretilir
+# (ama lokal'de oluştuysa pushlanabilir)
+
+# APK çıktıları
+*.apk
+*.aab
+app/release/
+app/debug/
+
+# Binary kütüphaneler — CI tarafından indirilir
+app/libs/*.aar
+app/src/main/jniLibs/**/*.so
