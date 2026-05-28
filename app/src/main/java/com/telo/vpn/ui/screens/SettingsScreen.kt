@@ -59,17 +59,17 @@ fun SettingsScreen(vm: MainViewModel, prefs: AppPreferences) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Enjam HWID", fontSize = 11.sp,
+                    Text("Enjam UUID (Server üçin)", fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
-                        vm.hwid,
+                        vm.hwidUuid,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace
                     )
                 }
                 IconButton(onClick = {
-                    clipboard.setText(AnnotatedString(vm.hwid))
+                    clipboard.setText(AnnotatedString(vm.hwidUuid))
                     hwidCopied = true
                 }) {
                     Icon(

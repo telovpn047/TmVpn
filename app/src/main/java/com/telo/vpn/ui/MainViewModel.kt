@@ -22,6 +22,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = VpnRepository(app)
 
     val hwid: String get() = repo.getHwid()
+    val hwidUuid: String get() = com.telo.vpn.util.HwidManager.getHwidAsUuid(getApplication())
 
     private val _connState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val connState: StateFlow<ConnectionState> = _connState.asStateFlow()
