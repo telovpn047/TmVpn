@@ -32,7 +32,7 @@ object ConfigParser {
             ServerConfig.Protocol.VMESS -> {
                 val b64 = config.raw.removePrefix("vmess://").substringBefore("#")
                 val remark = config.raw.substringAfter("#", "")
-                val json = JSONObject(String(Base64.decode(b64, Base64.DEFAULT or Base64.URL_SAFE)))
+                val json = JSONObject(String(Base64.decode(b64, Base64.DEFAULT)))
                 json.put("id", uuid)
                 val newB64 = Base64.encodeToString(json.toString().toByteArray(), Base64.NO_WRAP)
                 "vmess://$newB64" + if (remark.isNotEmpty()) "#$remark" else ""
@@ -84,7 +84,7 @@ object ConfigParser {
     // ─── VMess ───────────────────────────────────────────────────────────────
     private fun parseVmess(link: String): ServerConfig {
         val b64 = link.removePrefix("vmess://").substringBefore("#")
-        val json = JSONObject(String(Base64.decode(b64, Base64.DEFAULT or Base64.URL_SAFE)))
+        val json = JSONObject(String(Base64.decode(b64, Base64.DEFAULT)))
         val host = json.getString("add")
         val port = json.getString("port").toInt()
         val network = json.optString("net", "tcp")
@@ -176,7 +176,8 @@ object ConfigParser {
         f?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
 
     private fun tryBase64Decode(s: String): String? = runCatching {
-        String(Base64.decode(s, Base64.DEFAULT or Base64.URL_SAFE or Base64.NO_WRAP))
+        // Marzban standart base64 (+/ ile) döndürür — URL_SAFE flag kullanma
+        String(Base64.decode(s, Base64.DEFAULT))
             .takeIf { it.contains("://") }
     }.getOrNull()
 
