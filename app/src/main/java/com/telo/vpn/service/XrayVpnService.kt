@@ -65,13 +65,13 @@ class XrayVpnService : VpnService() {
         val serverName = intent.getStringExtra(EXTRA_SERVER_NAME) ?: "Telo VPN"
         val killSwitch = intent.getBooleanExtra(EXTRA_KILL_SWITCH, false)
 
-        startForeground(NOTIF_ID, buildNotification(serverName, "Bağlanıyor..."))
+        startForeground(NOTIF_ID, buildNotification(serverName, "Birikdirilýär..."))
 
         scope.launch {
             try {
                 startVpn(configJson, serverName, killSwitch)
                 isConnected.value = true
-                updateNotification(serverName, "Bağlandı")
+                updateNotification(serverName, "Birikdirildi")
                 trafficMonitor.statsFlow().collect { trafficStats.value = it }
             } catch (e: Exception) {
                 Log.e(TAG, "VPN başlatma hatası: ${e.message}", e)

@@ -52,11 +52,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             result
                 .onSuccess { (info, servers) ->
                     _userInfo.value = info
-                    val best = servers.firstOrNull { it.isReachable }
-                    _connState.value = if (best != null)
-                        ConnectionState.Ready(servers, best.config)
-                    else
-                        ConnectionState.Error("Elýeter server tapylmady")
+                    // Ping başarısızsa bile ilk sunucuyu seç — firewall TCP'yi bloklayabilir
+                    val best = servers.firstOrNull { it.isReachable } ?: servers.first()
+                    _connState.value = ConnectionState.Ready(servers, best.config)
                 }
                 .onFailure {
                     _connState.value = ConnectionState.Error(
