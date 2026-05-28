@@ -1,5 +1,7 @@
 package com.telo.vpn.api
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -12,7 +14,7 @@ class SubscriptionApi {
         .followRedirects(true)
         .build()
 
-    suspend fun fetchSubscription(subUrl: String): Result<SubscriptionResult> = runCatching {
+    suspend fun fetchSubscription(subUrl: String): Result<SubscriptionResult> = withContext(Dispatchers.IO) { runCatching {
         val req = Request.Builder()
             .url(subUrl)
             .header("User-Agent", "TeloVPN/1.0 (Android)")
@@ -26,7 +28,7 @@ class SubscriptionApi {
             val userInfo = parseUserInfoHeader(resp.header("Subscription-Userinfo") ?: "")
             SubscriptionResult(userInfo, body)
         }
-    }
+    } }
 
     private fun parseUserInfoHeader(header: String): SubscriptionUserInfo {
         if (header.isBlank()) return SubscriptionUserInfo()

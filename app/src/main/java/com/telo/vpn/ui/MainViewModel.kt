@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -46,7 +48,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadServers() {
         viewModelScope.launch {
             _connState.value = ConnectionState.Loading
-            repo.loadSubscription()
+            val result = withContext(Dispatchers.IO) { repo.loadSubscription() }
+            result
                 .onSuccess { (info, servers) ->
                     _userInfo.value = info
                     val best = servers.firstOrNull { it.isReachable }
@@ -57,7 +60,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 .onFailure {
                     _connState.value = ConnectionState.Error(
-                        it.message ?: "Birikdirme ýalňyşlygy — HWID: $hwid"
+                        it.message ?: "${it.javaClass.simpleName} (HWID: $hwid)"
                     )
                 }
         }
