@@ -9,9 +9,6 @@ import android.net.VpnService
 import androidx.core.app.NotificationCompat
 import com.telo.wg.data.AppPreferences
 import com.telo.wg.ui.MainActivity
-import org.amnezia.awg.backend.GoBackend
-import org.amnezia.awg.backend.Tunnel
-import org.amnezia.awg.config.Config
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +18,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.amnezia.awg.backend.GoBackend
+import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.backend.TunnelActionHandler
+import org.amnezia.awg.config.Config
 
 class TeloWgService : VpnService() {
 
@@ -47,6 +48,13 @@ class TeloWgService : VpnService() {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private var statsJob: Job? = null
 
+    private val noOpHandler = object : TunnelActionHandler {
+        override fun runPreUp(scripts: Collection<String>) {}
+        override fun runPostUp(scripts: Collection<String>) {}
+        override fun runPreDown(scripts: Collection<String>) {}
+        override fun runPostDown(scripts: Collection<String>) {}
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         return when (intent?.action) {
@@ -67,9 +75,11 @@ class TeloWgService : VpnService() {
 
             val configString = savedTunnel?.configText?.let { applyDnsOverride(it, dns) }
                 ?: buildFallbackConfigString(dns)
-            val config = Config.parse(configString.reader().buffered())
 
-            val be = GoBackend(applicationContext)
+            val config = Config.parse(configString.byteInputStream())
+
+            // Pass `this` (VpnService) as the Context so GoBackend can use VpnService.Builder
+            val be = GoBackend(this@TeloWgService, noOpHandler)
             backend = be
 
             val tun = object : Tunnel {
@@ -78,10 +88,11 @@ class TeloWgService : VpnService() {
                     _connectionState.value = when (newState) {
                         Tunnel.State.UP -> ConnectionState.CONNECTED
                         Tunnel.State.DOWN -> ConnectionState.DISCONNECTED
-                        Tunnel.State.TOGGLE -> ConnectionState.CONNECTING
                     }
                     updateNotification()
                 }
+                override fun isIpv4ResolutionPreferred(): Boolean = false
+                override fun isMetered(): Boolean = false
             }
             activeTunnel = tun
 
@@ -131,16 +142,12 @@ class TeloWgService : VpnService() {
         }
     }
 
-    // Replaces or inserts DNS in an existing config text
     private fun applyDnsOverride(configText: String, dns: String): String {
         val hasDns = configText.lines().any { it.trimStart().startsWith("DNS", ignoreCase = true) }
         return if (hasDns) {
             configText.replace(Regex("(?m)^DNS\\s*=.*$"), "DNS = $dns")
         } else {
-            configText.replace(
-                Regex("(?m)^(\\[Peer\\])"),
-                "DNS = $dns\n\n[Peer]"
-            )
+            configText.replace(Regex("(?m)^(\\[Peer\\])"), "DNS = $dns\n\n[Peer]")
         }
     }
 
