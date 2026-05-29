@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.telo.vpn.api.SubscriptionApi
 import com.telo.vpn.data.VpnRepository
 import com.telo.vpn.dataStore
@@ -30,9 +31,27 @@ class BootReceiver : BroadcastReceiver() {
                 val hwidUuid = HwidManager.getHwidAsUuid(context)
                 val servers = ConfigParser.parseSubscriptionWithHwid(result.rawLinks, hwidUuid)
                 val first = servers.firstOrNull() ?: return@runCatching
-                val config = XrayConfigBuilder.build(first)
-                val killSwitch = prefs[booleanPreferencesKey("kill_switch")] ?: false
-                XrayVpnService.start(context, config, first.remark, killSwitch)
+
+                val killSwitch       = prefs[booleanPreferencesKey("kill_switch")] ?: false
+                val customDns        = prefs[stringPreferencesKey("custom_dns")] ?: ""
+                val showTrafficNotif = prefs[booleanPreferencesKey("show_traffic_notif")] ?: true
+                val splitAppsRaw     = prefs[stringPreferencesKey("split_apps")] ?: ""
+                val splitMode        = prefs[stringPreferencesKey("split_mode")] ?: "bypass"
+                val splitApps        = ArrayList(
+                    splitAppsRaw.split(",").filter { it.isNotBlank() }
+                )
+
+                val configJson = XrayConfigBuilder.build(first, customDns = customDns)
+                XrayVpnService.start(
+                    ctx              = context,
+                    configJson       = configJson,
+                    serverName       = first.remark,
+                    killSwitch       = killSwitch,
+                    splitApps        = splitApps,
+                    splitMode        = splitMode,
+                    customDns        = customDns,
+                    showTrafficNotif = showTrafficNotif
+                )
             }
         }
     }

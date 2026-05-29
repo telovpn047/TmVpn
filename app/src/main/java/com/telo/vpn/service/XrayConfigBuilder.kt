@@ -13,7 +13,7 @@ object XrayConfigBuilder {
      * [tunMode=true]  → sadece outbound + routing. Go core tun fd'yi doğrudan yönetir.
      * [tunMode=false] → SOCKS inbound 10808 eklenir (test/debug için).
      */
-    fun build(cfg: ServerConfig, tunMode: Boolean = true): String {
+    fun build(cfg: ServerConfig, tunMode: Boolean = true, customDns: String = ""): String {
         return JSONObject().apply {
             put("log", JSONObject().put("loglevel", "warning"))
             put("stats", JSONObject())
@@ -27,7 +27,7 @@ object XrayConfigBuilder {
             put("inbounds", inbounds(tunMode))
             put("outbounds", outbounds(cfg))
             put("routing", routing())
-            put("dns", dns())
+            put("dns", dns(customDns))
             put("policy", policy())
         }.toString(2)
     }
@@ -239,13 +239,14 @@ object XrayConfigBuilder {
         })
     }
 
-    private fun dns() = JSONObject().apply {
+    private fun dns(customDns: String = "") = JSONObject().apply {
+        val primary = customDns.trim().takeIf { it.isNotEmpty() } ?: "1.1.1.1"
         put("servers", JSONArray().apply {
             put(JSONObject().apply {
-                put("address", "https://1.1.1.1/dns-query")
+                put("address", "https://$primary/dns-query")
                 put("domains", JSONArray().put("geosite:geolocation-!cn"))
             })
-            put("1.1.1.1")
+            put(primary)
             put("8.8.8.8")
         })
         put("queryStrategy", "UseIP")

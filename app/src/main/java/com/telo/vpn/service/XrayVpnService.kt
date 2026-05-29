@@ -23,26 +23,49 @@ class XrayVpnService : VpnService() {
         private const val TAG = "TeloVPN/Service"
         private const val CHANNEL_ID = "telo_vpn_status"
         private const val NOTIF_ID = 1
-        const val EXTRA_CONFIG_JSON = "config_json"
-        const val EXTRA_SERVER_NAME = "server_name"
-        const val EXTRA_KILL_SWITCH = "kill_switch"
+        const val EXTRA_CONFIG_JSON        = "config_json"
+        const val EXTRA_SERVER_NAME        = "server_name"
+        const val EXTRA_KILL_SWITCH        = "kill_switch"
+        const val EXTRA_SPLIT_APPS         = "split_apps"
+        const val EXTRA_SPLIT_MODE         = "split_mode"
+        const val EXTRA_CUSTOM_DNS         = "custom_dns"
+        const val EXTRA_SHOW_TRAFFIC_NOTIF = "show_traffic_notif"
         const val ACTION_STOP = "com.telo.vpn.ACTION_STOP"
 
         val trafficStats = MutableStateFlow(TrafficStats())
-        val isConnected = MutableStateFlow(false)
-        val startError = MutableStateFlow<String?>(null)
+        val isConnected  = MutableStateFlow(false)
+        val startError   = MutableStateFlow<String?>(null)
 
-        fun start(ctx: Context, configJson: String, serverName: String, killSwitch: Boolean = false) {
+        fun start(
+            ctx: Context,
+            configJson: String,
+            serverName: String,
+            killSwitch: Boolean = false,
+            splitApps: ArrayList<String> = arrayListOf(),
+            splitMode: String = "bypass",
+            customDns: String = "",
+            showTrafficNotif: Boolean = true
+        ) {
             startError.value = null
             ctx.startForegroundService(Intent(ctx, XrayVpnService::class.java).apply {
                 putExtra(EXTRA_CONFIG_JSON, configJson)
                 putExtra(EXTRA_SERVER_NAME, serverName)
                 putExtra(EXTRA_KILL_SWITCH, killSwitch)
+                putStringArrayListExtra(EXTRA_SPLIT_APPS, splitApps)
+                putExtra(EXTRA_SPLIT_MODE, splitMode)
+                putExtra(EXTRA_CUSTOM_DNS, customDns)
+                putExtra(EXTRA_SHOW_TRAFFIC_NOTIF, showTrafficNotif)
             })
         }
 
         fun stop(ctx: Context) {
             ctx.stopService(Intent(ctx, XrayVpnService::class.java))
+        }
+
+        private fun formatSpeed(bps: Long): String = when {
+            bps >= 1_000_000 -> "%.1f MB/s".format(bps / 1_000_000f)
+            bps >= 1_000     -> "%.0f KB/s".format(bps / 1_000f)
+            else             -> "$bps B/s"
         }
     }
 
@@ -59,22 +82,32 @@ class XrayVpnService : VpnService() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val configJson = intent?.getStringExtra(EXTRA_CONFIG_JSON) ?: return START_NOT_STICKY
-        val serverName = intent.getStringExtra(EXTRA_SERVER_NAME) ?: "Telo VPN"
-        val killSwitch = intent.getBooleanExtra(EXTRA_KILL_SWITCH, false)
+        if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
+
+        val configJson       = intent?.getStringExtra(EXTRA_CONFIG_JSON) ?: return START_NOT_STICKY
+        val serverName       = intent.getStringExtra(EXTRA_SERVER_NAME) ?: "Telo VPN"
+        val killSwitch       = intent.getBooleanExtra(EXTRA_KILL_SWITCH, false)
+        val splitApps        = intent.getStringArrayListExtra(EXTRA_SPLIT_APPS) ?: arrayListOf()
+        val splitMode        = intent.getStringExtra(EXTRA_SPLIT_MODE) ?: "bypass"
+        val customDns        = intent.getStringExtra(EXTRA_CUSTOM_DNS) ?: ""
+        val showTrafficNotif = intent.getBooleanExtra(EXTRA_SHOW_TRAFFIC_NOTIF, true)
 
         startForeground(NOTIF_ID, buildNotification(serverName, "Birikdirilýär..."))
 
         scope.launch {
             try {
-                startVpn(configJson, serverName, killSwitch)
+                startVpn(configJson, killSwitch, splitApps, splitMode, customDns)
                 isConnected.value = true
                 updateNotification(serverName, "Birikdirildi")
-                trafficMonitor.statsFlow().collect { trafficStats.value = it }
+                trafficMonitor.statsFlow().collect { stats ->
+                    trafficStats.value = stats
+                    if (showTrafficNotif) {
+                        updateNotification(
+                            serverName,
+                            "⬆ ${formatSpeed(stats.uploadBps)}  ⬇ ${formatSpeed(stats.downloadBps)}"
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "VPN başlatma hatası: ${e.message}", e)
                 startError.value = e.message ?: e.javaClass.simpleName
@@ -85,38 +118,51 @@ class XrayVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun startVpn(configJson: String, serverName: String, killSwitch: Boolean) {
-        // 1. Tun arayüzü kur
-        tunInterface = buildTunInterface(killSwitch)
+    private fun startVpn(
+        configJson: String,
+        killSwitch: Boolean,
+        splitApps: List<String>,
+        splitMode: String,
+        customDns: String
+    ) {
+        tunInterface = buildTunInterface(killSwitch, splitApps, splitMode, customDns)
             ?: error("Tun arayüzü oluşturulamadı — VPN izni eksik olabilir")
 
         val tunFd = tunInterface!!.fd
         Log.i(TAG, "Tun fd=$tunFd")
 
-        // 2. Xray engine başlat (libXray.aar varsa gerçek, yoksa stub)
         xrayEngine = createXrayEngine(this)
         if (!xrayEngine.start(configJson, tunFd)) {
             error("Xray core başlatılamadı")
         }
     }
 
-    private fun buildTunInterface(killSwitch: Boolean): ParcelFileDescriptor? {
+    private fun buildTunInterface(
+        killSwitch: Boolean,
+        splitApps: List<String>,
+        splitMode: String,
+        customDns: String
+    ): ParcelFileDescriptor? {
+        val dns = customDns.trim().takeIf { it.isNotEmpty() } ?: "1.1.1.1"
         val builder = Builder()
             .setSession("Telo VPN")
             .addAddress("10.10.10.1", 24)
             .addRoute("0.0.0.0", 0)
             .addRoute("::", 0)
-            .addDnsServer("1.1.1.1")
+            .addDnsServer(dns)
             .addDnsServer("8.8.8.8")
             .setMtu(1500)
-            .allowBypass()   // Xray'in outbound socketleri tünelden bypass geçebilir
+            .allowBypass()
 
-        if (killSwitch) {
-            // Kill switch: tüm trafik sadece VPN üzerinden geçer
-            // Ağ kesildiğinde internet erişimi de kesilir
-            builder.setBlocking(false)
-            // allowBypass() kaldırılır — hiçbir şey bypass edemez
+        if (splitApps.isNotEmpty()) {
+            if (splitMode == "allow") {
+                splitApps.forEach { pkg -> runCatching { builder.addAllowedApplication(pkg) } }
+            } else {
+                splitApps.forEach { pkg -> runCatching { builder.addDisallowedApplication(pkg) } }
+            }
         }
+
+        if (killSwitch) builder.setBlocking(false)
 
         return builder.establish()
     }

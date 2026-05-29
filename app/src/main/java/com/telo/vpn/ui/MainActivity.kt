@@ -27,6 +27,7 @@ import com.telo.vpn.service.XrayVpnService
 import com.telo.vpn.ui.screens.HomeScreen
 import com.telo.vpn.ui.screens.ServerListScreen
 import com.telo.vpn.ui.screens.SettingsScreen
+import com.telo.vpn.ui.screens.SplitTunnelingScreen
 import com.telo.vpn.ui.theme.TeloVpnTheme
 
 class MainActivity : ComponentActivity() {
@@ -59,16 +60,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestVpnPermission() {
-        val selected = vm.startConnecting() ?: return // State → Connecting, config sakla
+        val selected = vm.startConnecting() ?: return
         val intent = VpnService.prepare(this)
         if (intent != null) vpnPermissionLauncher.launch(intent) else launchVpn(selected)
     }
 
     private fun launchVpn(selected: com.telo.vpn.model.ServerConfig? = null) {
         val cfg = selected ?: run { vm.onDisconnect(); return }
-        val configJson = XrayConfigBuilder.build(cfg)
-        // markConnected artık çağrılmıyor — ViewModel isConnected flow'u izliyor
-        XrayVpnService.start(this, configJson, cfg.remark, vm.killSwitch)
+        val configJson = XrayConfigBuilder.build(cfg, customDns = vm.customDns.value)
+        XrayVpnService.start(
+            ctx              = this,
+            configJson       = configJson,
+            serverName       = cfg.remark,
+            killSwitch       = vm.killSwitch,
+            splitApps        = ArrayList(vm.splitTunnelingApps.value),
+            splitMode        = vm.splitMode.value,
+            customDns        = vm.customDns.value,
+            showTrafficNotif = vm.showTrafficNotif.value
+        )
     }
 
     private fun disconnectVpn() {
@@ -87,33 +96,36 @@ private fun MainNavigation(
     val navController = rememberNavController()
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
+    val isSubScreen = currentRoute == "split_tunneling"
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                NavItem.entries.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (!isSubScreen) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
+                ) {
+                    NavItem.entries.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = com.telo.vpn.ui.theme.TeloGreen,
-                            selectedTextColor = com.telo.vpn.ui.theme.TeloGreen,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant
+                            },
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = com.telo.vpn.ui.theme.TeloGreen,
+                                selectedTextColor = com.telo.vpn.ui.theme.TeloGreen,
+                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -130,7 +142,17 @@ private fun MainNavigation(
                 ServerListScreen(vm = vm)
             }
             composable(NavItem.SETTINGS.route) {
-                SettingsScreen(vm = vm, prefs = prefs)
+                SettingsScreen(
+                    vm = vm,
+                    prefs = prefs,
+                    onNavigateSplitTunneling = { navController.navigate("split_tunneling") }
+                )
+            }
+            composable("split_tunneling") {
+                SplitTunnelingScreen(
+                    prefs = prefs,
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }
