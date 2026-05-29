@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield shape -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,18 L82,30 L82,56 C82,72 68,84 54,90 C40,84 26,72 26,56 L26,30 Z" />
+    <!-- T letter -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M42,40 L66,40 L66,47 L57,47 L57,70 L51,70 L51,47 L42,47 Z" />
+</vector>

@@ -59,9 +59,11 @@ fun HomeScreen(
         animationSpec = tween(400), label = "btnScale"
     )
 
-    importError?.let { err ->
-        LaunchedEffect(err) {
-            kotlinx.coroutines.delay(3000)
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(importError) {
+        importError?.let {
+            snackbarHostState.showSnackbar(it)
             viewModel.clearImportError()
         }
     }
@@ -84,7 +86,8 @@ fun HomeScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Tunel goş", tint = Color.White)
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -93,7 +96,6 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Tunnel selector card
             OutlinedCard(
                 onClick = { showTunnelSheet = true },
                 modifier = Modifier.padding(horizontal = 32.dp)
@@ -192,14 +194,6 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
-        }
-
-        importError?.let {
-            Snackbar(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .align(Alignment.BottomCenter)
-            ) { Text(it) }
         }
     }
 

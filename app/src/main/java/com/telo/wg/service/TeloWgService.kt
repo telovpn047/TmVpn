@@ -9,9 +9,9 @@ import android.net.VpnService
 import androidx.core.app.NotificationCompat
 import com.telo.wg.data.AppPreferences
 import com.telo.wg.ui.MainActivity
-import com.zaneschepke.amneziawg.backend.GoBackend
-import com.zaneschepke.amneziawg.backend.Tunnel
-import com.zaneschepke.amneziawg.config.Config
+import org.amnezia.awg.backend.GoBackend
+import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.config.Config
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
