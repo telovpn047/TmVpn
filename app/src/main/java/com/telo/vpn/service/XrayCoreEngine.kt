@@ -51,7 +51,7 @@ class LibXrayEngine(private val service: VpnService) : XrayCoreEngine {
         return runCatching {
             val lib = Class.forName("libv2ray.Libv2ray")
 
-            // Config JSON'ı dosyaya yaz (Xray genellikle dosya yolu bekler)
+            // Config JSON'ı dosyaya yaz
             val configFile = File(service.filesDir, "xray_config.json")
             configFile.writeText(configJson)
             val configPath = configFile.absolutePath
@@ -59,7 +59,7 @@ class LibXrayEngine(private val service: VpnService) : XrayCoreEngine {
             // Socket protect sunucusunu başlat
             val protectName = protectServer.start()
 
-            val ok = tryStartLoop(lib, configPath, tunFd, protectName)
+            val ok = tryStartLoop(lib, configPath, configJson, tunFd, protectName)
             if (ok) {
                 running = true
                 Log.i(TAG, "Xray başlatıldı (fd=$tunFd)")
@@ -73,41 +73,41 @@ class LibXrayEngine(private val service: VpnService) : XrayCoreEngine {
     }
 
     /**
-     * Farklı imzaları dener; gomobile versiyona göre int/long veya 2/3 param değişebilir.
+     * Farklı imzaları dener; configPath (dosya yolu) ve configJson (raw string) her ikisi de denenir.
      */
-    private fun tryStartLoop(lib: Class<*>, configPath: String, fd: Int, protectName: String): Boolean {
-        // 1) startLoop(String, int, String) — 3 parametre, protect socket yolu ile
+    private fun tryStartLoop(lib: Class<*>, configPath: String, configJson: String, fd: Int, protectName: String): Boolean {
+        // 1) startLoop(String configPath, int fd, String protectPath)
         runCatching {
-            return lib.getMethod("startLoop",
-                String::class.java, Int::class.javaPrimitiveType, String::class.java)
+            return lib.getMethod("startLoop", String::class.java, Int::class.javaPrimitiveType, String::class.java)
                 .invoke(null, configPath, fd, protectName) as? Boolean ?: true
         }
-        // 2) startLoop(String, long, String)
+        // 2) startLoop(String configPath, long fd, String protectPath)
         runCatching {
-            return lib.getMethod("startLoop",
-                String::class.java, Long::class.javaPrimitiveType, String::class.java)
+            return lib.getMethod("startLoop", String::class.java, Long::class.javaPrimitiveType, String::class.java)
                 .invoke(null, configPath, fd.toLong(), protectName) as? Boolean ?: true
         }
-        // 3) startLoop(String, int) — 2 parametre
+        // 3) startLoop(String configPath, int fd)
         runCatching {
-            return lib.getMethod("startLoop",
-                String::class.java, Int::class.javaPrimitiveType)
+            return lib.getMethod("startLoop", String::class.java, Int::class.javaPrimitiveType)
                 .invoke(null, configPath, fd) as? Boolean ?: true
         }
-        // 4) startLoop(String, long)
+        // 4) startLoop(String configPath, long fd)
         runCatching {
-            return lib.getMethod("startLoop",
-                String::class.java, Long::class.javaPrimitiveType)
+            return lib.getMethod("startLoop", String::class.java, Long::class.javaPrimitiveType)
                 .invoke(null, configPath, fd.toLong()) as? Boolean ?: true
         }
-        // 5) startXray(String, int) — alternatif isim
+        // 5) startLoop(String configJson, int fd)  — raw JSON string ile
         runCatching {
-            lib.getMethod("startXray",
-                String::class.java, Int::class.javaPrimitiveType)
+            return lib.getMethod("startLoop", String::class.java, Int::class.javaPrimitiveType)
+                .invoke(null, configJson, fd) as? Boolean ?: true
+        }
+        // 6) startXray(String configPath, int fd)  — alternatif metod adı
+        runCatching {
+            lib.getMethod("startXray", String::class.java, Int::class.javaPrimitiveType)
                 .invoke(null, configPath, fd)
             return true
         }
-        Log.e(TAG, "Hiçbir startLoop imzası bulunamadı — logcat'te API metodlarına bak")
+        Log.e(TAG, "Hiçbir startLoop imzası eşleşmedi — logcat'te 'API:' satırlarına bak")
         return false
     }
 
