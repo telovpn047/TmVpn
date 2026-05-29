@@ -63,8 +63,10 @@ class TeloWgService : VpnService() {
 
             val prefs = AppPreferences(applicationContext)
             val dns = prefs.customDns.first()
+            val savedTunnel = prefs.activeTunnel.first()
 
-            val configString = buildConfigString(dns)
+            val configString = savedTunnel?.configText?.let { applyDnsOverride(it, dns) }
+                ?: buildFallbackConfigString(dns)
             val config = Config.parse(configString.reader().buffered())
 
             val be = GoBackend(applicationContext)
@@ -129,7 +131,20 @@ class TeloWgService : VpnService() {
         }
     }
 
-    private fun buildConfigString(dns: String): String = """
+    // Replaces or inserts DNS in an existing config text
+    private fun applyDnsOverride(configText: String, dns: String): String {
+        val hasDns = configText.lines().any { it.trimStart().startsWith("DNS", ignoreCase = true) }
+        return if (hasDns) {
+            configText.replace(Regex("(?m)^DNS\\s*=.*$"), "DNS = $dns")
+        } else {
+            configText.replace(
+                Regex("(?m)^(\\[Peer\\])"),
+                "DNS = $dns\n\n[Peer]"
+            )
+        }
+    }
+
+    private fun buildFallbackConfigString(dns: String): String = """
 [Interface]
 PrivateKey = PLACEHOLDER_PRIVATE_KEY_BASE64==
 Address = 10.0.0.2/32

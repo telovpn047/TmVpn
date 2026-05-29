@@ -66,4 +66,6 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation("com.zaneschepke:amneziawg-android:2.0.2")
+
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }
