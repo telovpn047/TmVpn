@@ -2,7 +2,7 @@ name: Build Telo VPN
 
 on:
   push:
-    branches: [ main, master, "claude/*" ]
+    branches: [ main, master, "claude/*", "release/*" ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
